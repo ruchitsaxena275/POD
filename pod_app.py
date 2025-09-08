@@ -10,7 +10,7 @@ st.set_page_config(page_title="Solar POD Dashboard", layout="wide")
 if "manpower" not in st.session_state:
     st.session_state.manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
 if "activities" not in st.session_state:
-    st.session_state.activities = pd.DataFrame(columns=["Activity", "Location"])
+    st.session_state.activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No. of Persons", "Employees"])
 if "alerts" not in st.session_state:
     st.session_state.alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
 
@@ -32,9 +32,19 @@ if st.sidebar.button("➕ Add Manpower"):
 # ---- ACTIVITY ENTRY ----
 activity = st.sidebar.text_input("Activity Name")
 location = st.sidebar.text_input("Location")
+activity_shift = st.sidebar.selectbox("Assign Shift", shifts)
+activity_people = st.sidebar.number_input("No. of Persons Assigned", min_value=0, step=1)
+activity_employees = st.sidebar.text_area("Employee Names (comma separated for this activity)")
 if st.sidebar.button("➕ Add Activity"):
+    new_row = {
+        "Activity": activity,
+        "Location": location,
+        "Shift": activity_shift,
+        "No. of Persons": activity_people,
+        "Employees": activity_employees
+    }
     st.session_state.activities = pd.concat(
-        [st.session_state.activities, pd.DataFrame([{"Activity": activity, "Location": location}])],
+        [st.session_state.activities, pd.DataFrame([new_row])],
         ignore_index=True
     )
 
@@ -66,40 +76,4 @@ col1, col2, col3, col4 = st.columns(4)
 col1.metric("Shifts", total_shifts)
 col2.metric("People", int(total_people))
 col3.metric("Activities", total_activities)
-col4.metric("Alerts", int(total_alerts))
-
-# ----------------- MAIN DASHBOARD -----------------
-col_left, col_right = st.columns([1, 1])
-
-with col_left:
-    st.markdown("#### 👷 Manpower")
-    if not st.session_state.manpower.empty:
-        st.dataframe(st.session_state.manpower, height=180)
-    else:
-        st.info("No manpower data.")
-
-    st.markdown("#### 📝 Activities")
-    if not st.session_state.activities.empty:
-        st.dataframe(st.session_state.activities, height=180)
-    else:
-        st.info("No activities.")
-
-with col_right:
-    st.markdown("#### 🚨 Alerts")
-    if not st.session_state.alerts.empty:
-        fig = px.bar(
-            st.session_state.alerts,
-            x="Alert Activity",
-            y="Alert Count",
-            text="Alert Count",
-            color="Alert Count",
-            height=300,
-            color_continuous_scale="reds"
-        )
-        fig.update_layout(margin=dict(l=10, r=10, t=30, b=10), yaxis=dict(range=[0, 100]))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No alerts yet.")
-
-# ----------------- FOOTER -----------------
-st.markdown("<div style='text-align:center;font-size:12px;color:gray;'>⚡ Designed with ❤️ for Solar Plant Operations</div>", unsafe_allow_html=True)
+col4.metric("Alerts", int(total_alerts)_
