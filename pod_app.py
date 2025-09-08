@@ -62,7 +62,7 @@ st.sidebar.info("Use the panel to add manpower, activities, and alerts. Dashboar
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
     <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:05px;text-align:center;">
-        <h1 style="color:white;margin:0;">☀️ Solar Plant Plan of Day Dashboard</h1>
+        <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
 """, unsafe_allow_html=True)
