@@ -1,104 +1,112 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from datetime import datetime
 
 # ----------------- PAGE CONFIG -----------------
-st.set_page_config(page_title="Plan of Day Dashboard", layout="wide")
+st.set_page_config(page_title="Solar POD Dashboard", layout="wide")
 
 # ----------------- SESSION STATE -----------------
-if "shift_df" not in st.session_state:
-    st.session_state.shift_df = pd.DataFrame(columns=["Shift Wise Team", "Shift Timing", "Number of Persons", "Roll Employee", "Off Roll Employee"])
+if "manpower" not in st.session_state:
+    st.session_state.manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
 
-if "activity_df" not in st.session_state:
-    st.session_state.activity_df = pd.DataFrame(columns=["Daily Routine Activity", "Team Name", "Total Count", "Tracker Alarm"])
+if "activities" not in st.session_state:
+    st.session_state.activities = pd.DataFrame(columns=["Activity", "Location"])
 
-shift_df = st.session_state.shift_df
-activity_df = st.session_state.activity_df
+if "alerts" not in st.session_state:
+    st.session_state.alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
+
+# ----------------- SIDEBAR -----------------
+st.sidebar.title("⚙️ POD Input Panel")
+
+# ---- SHIFT MANPOWER ENTRY ----
+st.sidebar.subheader("👷 Add Manpower (Shift-wise)")
+shifts = ["Shift A (06:30-15:00)", "General Shift (09:00-18:00)", 
+          "Shift B (13:00-21:00)", "Shift C (21:00-06:00)"]
+shift = st.sidebar.selectbox("Select Shift", shifts)
+manpower_count = st.sidebar.number_input("Number of Persons", min_value=0, step=1)
+employees = st.sidebar.text_area("Employee Names (comma separated)")
+if st.sidebar.button("➕ Add Manpower"):
+    new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": employees}
+    st.session_state.manpower = pd.concat([st.session_state.manpower, pd.DataFrame([new_row])], ignore_index=True)
+    st.sidebar.success("Manpower entry added!")
+
+# ---- ACTIVITY ENTRY ----
+st.sidebar.subheader("📝 Add Activity")
+activity = st.sidebar.text_input("Activity Name")
+location = st.sidebar.text_input("Location (Block/Array/Transformer Bay)")
+if st.sidebar.button("➕ Add Activity"):
+    new_row = {"Activity": activity, "Location": location}
+    st.session_state.activities = pd.concat([st.session_state.activities, pd.DataFrame([new_row])], ignore_index=True)
+    st.sidebar.success("Activity entry added!")
+
+# ---- ALERT ENTRY ----
+st.sidebar.subheader("🚨 Add Alert")
+alert_name = st.sidebar.text_input("Alert Activity")
+alert_count = st.sidebar.number_input("Alert Count", min_value=0, max_value=100, step=1)
+if st.sidebar.button("➕ Add Alert"):
+    new_row = {"Alert Activity": alert_name, "Alert Count": alert_count}
+    st.session_state.alerts = pd.concat([st.session_state.alerts, pd.DataFrame([new_row])], ignore_index=True)
+    st.sidebar.success("Alert entry added!")
+
+st.sidebar.markdown("---")
+st.sidebar.info("Use the panel to add manpower, activities, and alerts. Dashboard updates live!")
 
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
-    <div style="background:#d32f2f;padding:20px;border-radius:10px;text-align:center;">
-        <h1 style="color:white;margin:0;">PLAN OF THE DAY</h1>
-        <h3 style="color:white;margin:0;">JUNA Renewable Energy Pvt Ltd</h3>
-        <h4 style="color:white;margin:0;">{today}</h4>
+    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:10px;text-align:center;">
+        <h1 style="color:white;margin:0;">☀️ Solar Plant Plan of Day Dashboard</h1>
+        <h3 style="color:white;margin:0;">{today}</h3>
     </div>
 """, unsafe_allow_html=True)
 
 st.markdown("---")
 
-# ----------------- SHIFT ENTRY FORM -----------------
-st.subheader("👷 Add/Update Shift Details")
-with st.expander("➕ Add New Shift Entry"):
-    with st.form("shift_form", clear_on_submit=True):
-        shift = st.text_input("Shift Wise Team")
-        timing = st.text_input("Shift Timing (e.g., 06:30 TO 15:00)")
-        persons = st.number_input("Number of Persons", min_value=0, step=1)
-        roll_emp = st.text_area("Roll Employee Names")
-        off_roll_emp = st.text_area("Off Roll Employee Names")
-        submitted = st.form_submit_button("Add Shift Entry")
-        if submitted:
-            new_entry = {"Shift Wise Team": shift, "Shift Timing": timing,
-                         "Number of Persons": persons, "Roll Employee": roll_emp,
-                         "Off Roll Employee": off_roll_emp}
-            st.session_state.shift_df = pd.concat([shift_df, pd.DataFrame([new_entry])], ignore_index=True)
-            st.success("✅ Shift entry added!")
+# ----------------- KPI CARDS -----------------
+total_shifts = len(st.session_state.manpower)
+total_people = st.session_state.manpower["No. of Persons"].sum()
+total_activities = len(st.session_state.activities)
+total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
 
-# ----------------- ACTIVITY ENTRY FORM -----------------
-st.subheader("📋 Add/Update Daily Activities")
-with st.expander("➕ Add New Activity Entry"):
-    with st.form("activity_form", clear_on_submit=True):
-        activity = st.text_input("Daily Routine Activity")
-        team = st.text_input("Team Name")
-        count = st.number_input("Total Count", min_value=0, step=1)
-        alarm = st.text_input("Tracker Alarm (e.g., 33 alarms today)")
-        submitted_act = st.form_submit_button("Add Activity")
-        if submitted_act:
-            new_activity = {"Daily Routine Activity": activity, "Team Name": team,
-                            "Total Count": count, "Tracker Alarm": alarm}
-            st.session_state.activity_df = pd.concat([activity_df, pd.DataFrame([new_activity])], ignore_index=True)
-            st.success("✅ Activity entry added!")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Shifts", total_shifts)
+col2.metric("Total People", int(total_people))
+col3.metric("Total Activities", total_activities)
+col4.metric("Total Alerts", int(total_alerts))
 
-# ----------------- DISPLAY TABLES -----------------
-st.subheader("📊 Shift Wise Team Overview")
-st.dataframe(st.session_state.shift_df, use_container_width=True, height=230)
+# ----------------- MANPOWER TABLE -----------------
+st.subheader("👷 Shift-wise Manpower Details")
+if not st.session_state.manpower.empty:
+    st.dataframe(st.session_state.manpower, use_container_width=True)
+else:
+    st.info("No manpower data added yet.")
 
-st.subheader("📊 Plan of The Day Activities")
-st.dataframe(st.session_state.activity_df, use_container_width=True, height=280)
+# ----------------- ACTIVITIES TABLE -----------------
+st.subheader("📝 Planned Activities")
+if not st.session_state.activities.empty:
+    st.dataframe(st.session_state.activities, use_container_width=True)
+else:
+    st.info("No activity data added yet.")
 
-# ----------------- KPI SUMMARY -----------------
-total_activities = len(activity_df)
-total_people = activity_df["Total Count"].sum()
-alarms = sum(activity_df["Tracker Alarm"].str.extract('(\d+)').dropna()[0].astype(int)) if not activity_df["Tracker Alarm"].isnull().all() else 0
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Total Activities", total_activities)
-with col2:
-    st.metric("Total People Deployed", int(total_people))
-with col3:
-    st.metric("Tracker Alarms Today", int(alarms))
-
-# ----------------- EXPORT BUTTONS -----------------
-st.markdown("---")
-col1, col2 = st.columns(2)
-with col1:
-    st.download_button(
-        "📥 Download Shift Data (CSV)",
-        data=st.session_state.shift_df.to_csv(index=False),
-        file_name=f"shift_data_{today}.csv",
-        mime="text/csv"
+# ----------------- ALERTS BAR CHART -----------------
+st.subheader("🚨 Alerts Overview")
+if not st.session_state.alerts.empty:
+    fig = px.bar(
+        st.session_state.alerts,
+        x="Alert Activity",
+        y="Alert Count",
+        text="Alert Count",
+        color="Alert Count",
+        color_continuous_scale="reds"
     )
-with col2:
-    st.download_button(
-        "📥 Download Activity Data (CSV)",
-        data=st.session_state.activity_df.to_csv(index=False),
-        file_name=f"activity_data_{today}.csv",
-        mime="text/csv"
-    )
+    fig.update_layout(yaxis=dict(range=[0, 100], dtick=10), xaxis_title="Alert Activities", yaxis_title="Count")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No alerts added yet.")
 
 # ----------------- FOOTER -----------------
 st.markdown(
-    "<div style='text-align:center;color:gray;'>Designed with ❤️ for Solar Plant Daily Ops</div>",
+    "<div style='text-align:center;color:gray;'>⚡ Designed by Ruchit for Solar Plant Daily Operations</div>",
     unsafe_allow_html=True
 )
