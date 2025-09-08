@@ -61,7 +61,7 @@ st.sidebar.info("Use the panel to add manpower, activities, and alerts. Dashboar
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
-    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:10px;text-align:center;">
+    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:05px;text-align:center;">
         <h1 style="color:white;margin:0;">☀️ Solar Plant Plan of Day Dashboard</h1>
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
@@ -113,7 +113,7 @@ else:
 
 # ----------------- FOOTER -----------------
 st.markdown(
-    "<div style='text-align:center;color:gray;'>⚡ Designed with ❤️ for Solar Plant Daily Operations</div>",
+    "<div style='text-align:center;color:gray;'>⚡ Designed by Acciona for Solar Plant Daily Operations</div>",
     unsafe_allow_html=True
 )
 
