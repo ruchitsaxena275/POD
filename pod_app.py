@@ -1,115 +1,71 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
-import os
 
-# ----------------- CONFIG -----------------
+# ----------------- PAGE CONFIG -----------------
 st.set_page_config(page_title="Plan of Day Dashboard", layout="wide")
 
-DATA_DIR = "data"
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
+# ----------------- DATA STRUCTURE -----------------
+# Sample Data (You can connect this to a CSV or database)
+shift_data = [
+    ["Shift-A", "06:30 TO 15:00", 4, "Sawai, Hemant", "Kishna, Goutam, Ajay, Narendra"],
+    ["General Shift", "09:00 TO 18:00", 6, "Sawai, Hemant", "Devisingh, Kanaram, Laxman, Suresh"],
+    ["Shift-B", "13:00 TO 21:00", 2, "-", "Narpat, Dinesh"],
+    ["Shift-C", "21:00 TO 06:00", 3, "-", "Santosh, Vikram, Navratan"],
+    ["Leave", "-", "-", "W/off: Roop Singh, Rajendra", "-"]
+]
 
-# ----------------- HELPER FUNCTIONS -----------------
-def load_data(date):
-    path = os.path.join(DATA_DIR, f"activities_{date}.csv")
-    if os.path.exists(path):
-        return pd.read_csv(path)
-    return pd.DataFrame(columns=[
-        "Activity Name", "Location", "Team", "Start Time", "End Time",
-        "Priority", "Tools", "Status", "Notes"
-    ])
+activity_data = [
+    ["Scada monitoring & operations, F&S -A", "Narpat", 1, "33 alarms today"],
+    ["Scada monitoring & operations, F&S -B", "Kishna", 1, ""],
+    ["Scada monitoring & operations, F&S -C", "Santosh", 1, ""],
+    ["Tracker alarm rectification & actuator replacement", "Suresh, Devi", 5, ""],
+    ["220kV Lead & dump", "Kanaram", 1, ""],
+    ["Trafo WTI & OTI monitoring", "Kanaram, Navratan, Vikram", 2, ""],
+    ["Project support", "Kanaram, Dinesh", 2, ""]
+]
 
-def save_data(date, df):
-    path = os.path.join(DATA_DIR, f"activities_{date}.csv")
-    df.to_csv(path, index=False)
+# Convert to DataFrames
+shift_df = pd.DataFrame(shift_data, columns=["Shift Wise Team", "Shift Timing", "Number of Persons", "Roll Employee", "Off Roll Employee"])
+activity_df = pd.DataFrame(activity_data, columns=["Daily Routine Activity", "Team Name", "Total Count", "Tracker Alarm"])
 
-# ----------------- SIDEBAR -----------------
-st.sidebar.title("Plan of Day")
-selected_date = st.sidebar.date_input("Select Date", datetime.today())
-selected_date_str = selected_date.strftime("%Y-%m-%d")
+# ----------------- HEADER -----------------
+today = datetime.today().strftime("%d-%m-%Y")
+st.markdown(f"""
+    <div style="background:#d32f2f;padding:20px;border-radius:10px;text-align:center;">
+        <h1 style="color:white;margin:0;">PLAN OF THE DAY</h1>
+        <h3 style="color:white;margin:0;">JUNA Renewable Energy Pvt Ltd</h3>
+        <h4 style="color:white;margin:0;">{today}</h4>
+    </div>
+""", unsafe_allow_html=True)
 
-# ----------------- LOAD DATA -----------------
-df = load_data(selected_date_str)
+st.markdown("---")
 
-# ----------------- DASHBOARD METRICS -----------------
-st.markdown(f"## 📅 Plan of Day - {selected_date_str}")
+# ----------------- SHIFT TEAM TABLE -----------------
+st.subheader("👷 Shift Wise Team Overview")
+st.dataframe(shift_df, use_container_width=True, height=230)
 
-if not df.empty:
-    total_activities = len(df)
-    completed = len(df[df["Status"] == "Completed"])
-    progress = round((completed / total_activities) * 100, 1) if total_activities > 0 else 0
+# ----------------- PLAN OF THE DAY -----------------
+st.subheader("📋 Plan of The Day Activities")
+st.dataframe(activity_df, use_container_width=True, height=280)
 
-    # KPI Cards
-    kpi1, kpi2, kpi3 = st.columns(3)
-    with kpi1:
-        st.markdown(
-            f'<div style="background:#f9f9f9;padding:20px;border-radius:12px;box-shadow:0 2px 5px rgba(0,0,0,0.1);">'
-            f'<h4>Total Activities</h4><h2>{total_activities}</h2></div>',
-            unsafe_allow_html=True
-        )
-    with kpi2:
-        st.markdown(
-            f'<div style="background:#f9f9f9;padding:20px;border-radius:12px;box-shadow:0 2px 5px rgba(0,0,0,0.1);">'
-            f'<h4>Completed</h4><h2>{completed}</h2></div>',
-            unsafe_allow_html=True
-        )
-    with kpi3:
-        st.markdown(
-            f'<div style="background:#f9f9f9;padding:20px;border-radius:12px;box-shadow:0 2px 5px rgba(0,0,0,0.1);">'
-            f'<h4>Progress</h4><h2>{progress}%</h2></div>',
-            unsafe_allow_html=True
-        )
+# ----------------- KPI SUMMARY -----------------
+total_activities = len(activity_df)
+total_people = shift_df["Number of Persons"].replace("-", 0).astype(str).str.extract('(\d+)').dropna().astype(int).sum()[0]
+alarms = sum(activity_df["Tracker Alarm"].str.extract('(\d+)').dropna()[0].astype(int)) if not activity_df["Tracker Alarm"].isnull().all() else 0
 
-    st.markdown("---")
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Total Activities", total_activities)
+with col2:
+    st.metric("Total People Deployed", int(total_people))
+with col3:
+    st.metric("Tracker Alarms Today", int(alarms))
 
-    # ----------------- TABLE DASHBOARD -----------------
-    st.subheader("📋 Activities Overview")
-    st.dataframe(df, use_container_width=True)
+st.markdown("---")
 
-    # ----------------- VISUALS -----------------
-    st.subheader("📊 Visual Summary")
-
-    # Pie chart for Status
-    if not df["Status"].isnull().all():
-        pie_fig = px.pie(df, names="Status", title="Activity Status Distribution", hole=0.4)
-        st.plotly_chart(pie_fig, use_container_width=True)
-
-else:
-    st.info("No activities planned for this day yet. Use the form below to add activities.")
-
-# ----------------- ACTIVITY PLANNER FORM -----------------
-st.markdown("## ➕ Add / Edit Activities")
-
-with st.form("activity_form"):
-    c1, c2 = st.columns(2)
-    with c1:
-        activity_name = st.text_input("Activity Name")
-        location = st.text_input("Location (Block/Array/Transformer Bay)")
-        team = st.text_input("Assigned Team")
-        priority = st.selectbox("Priority", ["Low", "Medium", "High"])
-    with c2:
-        start_time = st.time_input("Start Time", value=datetime.now().time())
-        end_time = st.time_input("End Time", value=datetime.now().time())
-        status = st.selectbox("Status", ["Planned", "In-Progress", "Completed"])
-        tools = st.text_input("Required Tools")
-    notes = st.text_area("Notes")
-
-    submitted = st.form_submit_button("Save Activity")
-    if submitted:
-        new_data = pd.DataFrame([{
-            "Activity Name": activity_name,
-            "Location": location,
-            "Team": team,
-            "Start Time": start_time.strftime("%H:%M"),
-            "End Time": end_time.strftime("%H:%M"),
-            "Priority": priority,
-            "Tools": tools,
-            "Status": status,
-            "Notes": notes
-        }])
-        df = pd.concat([df, new_data], ignore_index=True)
-        save_data(selected_date_str, df)
-        st.success("Activity saved successfully!")
-        st.experimental_rerun()
+# ----------------- FOOTER -----------------
+st.markdown(
+    "<div style='text-align:center;color:gray;'>Designed for Solar Plant Daily Ops</div>",
+    unsafe_allow_html=True
+)
