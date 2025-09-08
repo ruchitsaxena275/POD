@@ -325,7 +325,7 @@ if nav == "Dashboard":
     with c3:
         st.markdown('<div class="kpi"><div class="small-muted">Hours Planned</div><div class="value">%.2f</div>' % planned_hours, unsafe_allow_html=True)
     with c4:
-    st.markdown(
+        st.markdown(
         f'<div class="kpi"><div class="small-muted">% Progress</div>'
         f'<div class="value">{progress}%</div></div>',
         unsafe_allow_html=True
