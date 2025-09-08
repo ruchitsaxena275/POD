@@ -11,7 +11,7 @@ if "manpower" not in st.session_state:
     st.session_state.manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
 
 if "activities" not in st.session_state:
-    st.session_state.activities = pd.DataFrame(columns=["Activity", "Location", "Assigned Manpower"])
+    st.session_state.activities = pd.DataFrame(columns=["Activity", "Location"])
 
 if "alerts" not in st.session_state:
     st.session_state.alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
@@ -21,7 +21,7 @@ st.sidebar.title("⚙️ POD Input Panel")
 
 # ---- SHIFT MANPOWER ENTRY ----
 st.sidebar.subheader("👷 Add Manpower (Shift-wise)")
-shifts = ["Shift A (06:30-15:00)", "General Shift (09:00-18:00)",
+shifts = ["Shift A (06:30-15:00)", "General Shift (09:00-18:00)", 
           "Shift B (13:00-21:00)", "Shift C (21:00-06:00)"]
 shift = st.sidebar.selectbox("Select Shift", shifts)
 manpower_count = st.sidebar.number_input("Number of Persons", min_value=0, step=1)
@@ -29,25 +29,16 @@ employees = st.sidebar.text_area("Employee Names (comma separated)")
 if st.sidebar.button("➕ Add Manpower"):
     new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": employees}
     st.session_state.manpower = pd.concat([st.session_state.manpower, pd.DataFrame([new_row])], ignore_index=True)
-    st.sidebar.success("✅ Manpower entry added!")
+    st.sidebar.success("Manpower entry added!")
 
 # ---- ACTIVITY ENTRY ----
 st.sidebar.subheader("📝 Add Activity")
 activity = st.sidebar.text_input("Activity Name")
 location = st.sidebar.text_input("Location (Block/Array/Transformer Bay)")
-
-# Extract manpower names dynamically
-manpower_names = []
-if not st.session_state.manpower.empty:
-    for emp_list in st.session_state.manpower["Employees"].dropna():
-        manpower_names.extend([name.strip() for name in emp_list.split(",") if name.strip()])
-
-assigned_people = st.sidebar.multiselect("Assign Manpower", manpower_names)
-
 if st.sidebar.button("➕ Add Activity"):
-    new_row = {"Activity": activity, "Location": location, "Assigned Manpower": ", ".join(assigned_people)}
+    new_row = {"Activity": activity, "Location": location}
     st.session_state.activities = pd.concat([st.session_state.activities, pd.DataFrame([new_row])], ignore_index=True)
-    st.sidebar.success("✅ Activity entry added!")
+    st.sidebar.success("Activity entry added!")
 
 # ---- ALERT ENTRY ----
 st.sidebar.subheader("🚨 Add Alert")
@@ -56,7 +47,10 @@ alert_count = st.sidebar.number_input("Alert Count", min_value=0, max_value=100,
 if st.sidebar.button("➕ Add Alert"):
     new_row = {"Alert Activity": alert_name, "Alert Count": alert_count}
     st.session_state.alerts = pd.concat([st.session_state.alerts, pd.DataFrame([new_row])], ignore_index=True)
-    st.sidebar.success("✅ Alert entry added!")
+    st.sidebar.success("Alert entry added!")
+
+st.sidebar.markdown("---")
+st.sidebar.info("Use the panel to add manpower, activities, and alerts. Dashboard updates live!")
 
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
@@ -66,6 +60,8 @@ st.markdown(f"""
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
 """, unsafe_allow_html=True)
+
+st.markdown("---")
 
 # ----------------- KPI CARDS -----------------
 total_shifts = len(st.session_state.manpower)
@@ -79,43 +75,38 @@ col2.metric("Total People", int(total_people))
 col3.metric("Total Activities", total_activities)
 col4.metric("Total Alerts", int(total_alerts))
 
-st.markdown("---")
+# ----------------- MANPOWER TABLE -----------------
+st.subheader("👷 Shift-wise Manpower Details")
+if not st.session_state.manpower.empty:
+    st.dataframe(st.session_state.manpower, use_container_width=True)
+else:
+    st.info("No manpower data added yet.")
 
-# ----------------- LAYOUT (NO SCROLL) -----------------
-tab1, tab2, tab3 = st.tabs(["👷 Manpower", "📝 Activities", "🚨 Alerts"])
+# ----------------- ACTIVITIES TABLE -----------------
+st.subheader("📝 Planned Activities")
+if not st.session_state.activities.empty:
+    st.dataframe(st.session_state.activities, use_container_width=True)
+else:
+    st.info("No activity data added yet.")
 
-with tab1:
-    st.subheader("Shift-wise Manpower Details")
-    if not st.session_state.manpower.empty:
-        st.dataframe(st.session_state.manpower, use_container_width=True, height=280)
-    else:
-        st.info("No manpower data added yet.")
-
-with tab2:
-    st.subheader("Planned Activities with Manpower Allocation")
-    if not st.session_state.activities.empty:
-        st.dataframe(st.session_state.activities, use_container_width=True, height=280)
-    else:
-        st.info("No activities added yet.")
-
-with tab3:
-    st.subheader("Alerts Overview")
-    if not st.session_state.alerts.empty:
-        fig = px.bar(
-            st.session_state.alerts,
-            x="Alert Activity",
-            y="Alert Count",
-            text="Alert Count",
-            color="Alert Count",
-            color_continuous_scale="reds"
-        )
-        fig.update_layout(yaxis=dict(range=[0, 100], dtick=10), xaxis_title="Alert Activities", yaxis_title="Count")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No alerts added yet.")
+# ----------------- ALERTS BAR CHART -----------------
+st.subheader("🚨 Alerts Overview")
+if not st.session_state.alerts.empty:
+    fig = px.bar(
+        st.session_state.alerts,
+        x="Alert Activity",
+        y="Alert Count",
+        text="Alert Count",
+        color="Alert Count",
+        color_continuous_scale="reds"
+    )
+    fig.update_layout(yaxis=dict(range=[0, 100], dtick=10), xaxis_title="Alert Activities", yaxis_title="Count")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No alerts added yet.")
 
 # ----------------- FOOTER -----------------
 st.markdown(
-    "<div style='text-align:center;color:gray;'>⚡ Designed by Ruchit for Solar Plant Daily Operations</div>",
+    "<div style='text-align:center;color:gray;'>⚡ Designed with ❤️ for Solar Plant Daily Operations</div>",
     unsafe_allow_html=True
 )
