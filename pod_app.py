@@ -44,7 +44,7 @@ if st.sidebar.button("➕ Add Activity"):
         "Location": location,
         "Shift": activity_shift,
         "No. of Persons": activity_people,
-        "Employees": activity_employees
+        "Employees": activity_employees}
         
 # ---- ALERT ENTRY ----
 st.sidebar.subheader("🚨 Add Alert")
