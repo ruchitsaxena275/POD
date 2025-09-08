@@ -325,8 +325,10 @@ if nav == "Dashboard":
     with c3:
         st.markdown('<div class="kpi"><div class="small-muted">Hours Planned</div><div class="value">%.2f</div>' % planned_hours, unsafe_allow_html=True)
     with c4:
-        st.markdown('<div class="kpi"><div class="small-muted">% Progress</div><div class="value">%d%%</div>' % progress, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        with c4:
+    # Use an f-string so literal percent signs don't conflict with formatting
+    st.markdown(f'<div class="kpi"><div class="small-muted">% Progress</div><div class="value">{progress}%</div></div>', unsafe_allow_html=True)
+
 
     # Charts row
     st.write("")
