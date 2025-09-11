@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+from io import BytesIO
 import os
 
 # ----------------- PAGE CONFIG -----------------
@@ -149,17 +150,28 @@ if not st.session_state.alerts.empty:
 else:
     st.info("No alerts added yet.")
 
-# ----------------- SAVE DATA LOCALLY -----------------
-st.subheader("💾 Save POD + EOD Data")
-if st.button("Save Today's Data"):
+# ----------------- SAVE & DOWNLOAD POD -----------------
+st.subheader("💾 Save & Download POD + EOD Data")
+if st.button("Prepare POD for Download"):
     date_str = datetime.today().strftime("%d-%m-%Y")
-    file_path = f"{folder}/POD_{date_str}.xlsx"
-    with pd.ExcelWriter(file_path) as writer:
+    
+    # Save Excel in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
         st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
         st.session_state.activities.to_excel(writer, sheet_name="Activities", index=False)
         st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
         st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
-    st.success(f"✅ Data saved as {file_path}")
+    output.seek(0)
+    
+    # Provide download button
+    st.download_button(
+        label=f"📥 Download POD_{date_str}.xlsx",
+        data=output,
+        file_name=f"POD_{date_str}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    st.success("✅ POD file ready for download!")
 
 # ----------------- FOOTER -----------------
 st.markdown(
