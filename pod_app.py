@@ -8,24 +8,50 @@ import os
 # ----------------- PAGE CONFIG -----------------
 st.set_page_config(page_title="Solar POD Dashboard", layout="wide")
 
-# ----------------- SESSION STATE -----------------
-if "manpower" not in st.session_state:
-    st.session_state.manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
+# ----------------- AUTO-SAVE CONFIG -----------------
+TODAY = datetime.now().strftime("%Y-%m-%d")
+DATA_DIR = "pod_data"
+os.makedirs(DATA_DIR, exist_ok=True)
+FILE_PATH = os.path.join(DATA_DIR, f"POD_{TODAY}.xlsx")
 
-if "activities" not in st.session_state:
-    st.session_state.activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No. of Persons", "Employees"])
+# ----------------- DEFAULT DATAFRAMES -----------------
+default_manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
+default_activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No. of Persons", "Employees"])
+default_alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
+default_eod = pd.DataFrame(columns=["Type", "Name", "Status", "Remarks", "Alert Count Balance"])
 
-if "alerts" not in st.session_state:
-    st.session_state.alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
+# ----------------- LOAD TODAY'S DATA IF EXISTS -----------------
+if os.path.exists(FILE_PATH):
+    try:
+        with pd.ExcelFile(FILE_PATH) as xls:
+            st.session_state.manpower = pd.read_excel(xls, "Manpower")
+            st.session_state.activities = pd.read_excel(xls, "Activities")
+            st.session_state.alerts = pd.read_excel(xls, "Alerts")
+            st.session_state.eod = pd.read_excel(xls, "EOD")
+    except Exception:
+        st.session_state.manpower = default_manpower.copy()
+        st.session_state.activities = default_activities.copy()
+        st.session_state.alerts = default_alerts.copy()
+        st.session_state.eod = default_eod.copy()
+else:
+    st.session_state.manpower = default_manpower.copy()
+    st.session_state.activities = default_activities.copy()
+    st.session_state.alerts = default_alerts.copy()
+    st.session_state.eod = default_eod.copy()
 
-if "eod" not in st.session_state:
-    st.session_state.eod = pd.DataFrame(columns=["Type", "Name", "Status", "Remarks", "Alert Count Balance"])
+# ----------------- SAVE FUNCTION -----------------
+def save_data():
+    with pd.ExcelWriter(FILE_PATH, engine="openpyxl") as writer:
+        st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
+        st.session_state.activities.to_excel(writer, sheet_name="Activities", index=False)
+        st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
+        st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
 
 # ----------------- POD DATA FOLDER -----------------
 folder = "pod_data"
 os.makedirs(folder, exist_ok=True)
 
-# ----------------- LOAD PREVIOUS DATA -----------------
+# ----------------- LOAD PREVIOUS DATA MANUALLY -----------------
 st.sidebar.subheader("📂 Load Previous POD Data")
 pod_files = [f for f in os.listdir(folder) if f.startswith("POD_") and f.endswith(".xlsx")]
 pod_files.sort(reverse=True)
@@ -56,6 +82,7 @@ employees = st.sidebar.text_area("Employee Names (comma separated)")
 if st.sidebar.button("➕ Add Manpower"):
     new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": employees}
     st.session_state.manpower = pd.concat([st.session_state.manpower, pd.DataFrame([new_row])], ignore_index=True)
+    save_data()
     st.sidebar.success("Manpower entry added!")
 
 # ---- ACTIVITY ENTRY ----
@@ -73,6 +100,7 @@ if st.sidebar.button("➕ Add Activity"):
         "No. of Persons": activity_people,
         "Employees": activity_employees}
     st.session_state.activities = pd.concat([st.session_state.activities, pd.DataFrame([new_row])], ignore_index=True)
+    save_data()
     st.sidebar.success("Activity entry added!")
 
 # ---- ALERT ENTRY ----
@@ -82,6 +110,7 @@ alert_count = st.sidebar.number_input("Alert Count", min_value=0, max_value=100,
 if st.sidebar.button("➕ Add Alert"):
     new_row = {"Alert Activity": alert_name, "Alert Count": alert_count}
     st.session_state.alerts = pd.concat([st.session_state.alerts, pd.DataFrame([new_row])], ignore_index=True)
+    save_data()
     st.sidebar.success("Alert entry added!")
 
 # ---- EOD ENTRY ----
@@ -120,12 +149,13 @@ if eod_name:
             "Alert Count Balance": alert_count_balance if eod_type=="Alert" else ""
         }
         st.session_state.eod = pd.concat([st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True)
+        save_data()
         st.sidebar.success(f"EOD {eod_type} update added!")
 
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
-    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:10px;text-align:center;">
+    <div style="background:linear-gradient(90deg, #EFEF36, #f44336);padding:15px;border-radius:10px;text-align:center;">
         <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
