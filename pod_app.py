@@ -88,12 +88,11 @@ if st.sidebar.button("➕ Add Alert"):
 st.sidebar.subheader("📊 End of Day Update")
 eod_type = st.sidebar.radio("Update Type", ["Activity", "Alert"])
 
+eod_name = None
 if eod_type == "Activity" and not st.session_state.activities.empty:
     eod_name = st.sidebar.selectbox("Select Activity", st.session_state.activities["Activity"].tolist())
 elif eod_type == "Alert" and not st.session_state.alerts.empty:
     eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
-else:
-    eod_name = None
 
 if eod_name:
     eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type == "Activity" else ["✅ Resolved", "❌ Pending"]
@@ -107,7 +106,7 @@ if eod_name:
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
-    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:10px;text-align:center;">
+    <div style="background:linear-gradient(90deg, #EFEF36, #f44336);padding:20px;border-radius:10px;text-align:center;">
         <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
@@ -121,10 +120,13 @@ total_people = st.session_state.manpower["No. of Persons"].sum()
 total_activities = len(st.session_state.activities)
 total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
 
-completed_activities = len(st.session_state.eod[(st.session_state.eod["Type"]=="Activity") & (st.session_state.eod["Status"]=="✅ Completed")])
-pending_activities = len(st.session_state.eod[(st.session_state.eod["Type"]=="Activity") & (st.session_state.eod["Status"]=="❌ Pending")])
-resolved_alerts = len(st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & (st.session_state.eod["Status"]=="✅ Resolved")])
-pending_alerts = len(st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & (st.session_state.eod["Status"]=="❌ Pending")])
+# Use safe .get() to avoid KeyError
+eod = st.session_state.get("eod", pd.DataFrame(columns=["Type","Name","Status","Remarks"]))
+
+completed_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="✅ Completed")])
+pending_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="❌ Pending")])
+resolved_alerts = len(eod[(eod.get("Type")=="Alert") & (eod.get("Status")=="✅ Resolved")])
+pending_alerts = len(eod[(eod.get("Type")=="Alert") & (eod.get("Status")=="❌ Pending")])
 
 col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
 col1.metric("Total Shifts", total_shifts)
@@ -146,7 +148,7 @@ st.dataframe(st.session_state.activities, use_container_width=True)
 
 # ----------------- EOD TABLE -----------------
 st.subheader("📊 End of Day Updates")
-st.dataframe(st.session_state.eod, use_container_width=True)
+st.dataframe(eod, use_container_width=True)
 
 # ----------------- ALERTS BAR CHART -----------------
 st.subheader("🚨 Alerts Overview")
@@ -173,7 +175,7 @@ if st.button("Prepare POD for Download"):
         st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
         st.session_state.activities.to_excel(writer, sheet_name="Activities", index=False)
         st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
-        st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
+        eod.to_excel(writer, sheet_name="EOD", index=False)
     output.seek(0)
     st.download_button(
         label=f"📥 Download POD_{date_str}.xlsx",
