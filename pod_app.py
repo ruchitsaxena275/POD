@@ -95,14 +95,18 @@ if eod_type == "Activity" and not st.session_state.activities.empty:
 elif eod_type == "Alert" and not st.session_state.alerts.empty:
     eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
     alert_total = int(st.session_state.alerts.loc[st.session_state.alerts["Alert Activity"]==eod_name, "Alert Count"].values[0])
-    # Calculate balance of alert count
-    if not st.session_state.eod.empty:
-        alert_resolved = st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & 
-                                             (st.session_state.eod["Name"]==eod_name) & 
-                                             (st.session_state.eod["Status"]=="✅ Resolved")]["Alert Count Balance"].sum()
-        alert_count_balance = max(alert_total - alert_resolved, 0)
+    
+    # FIX: safely calculate resolved alerts
+    if "Alert Count Balance" in st.session_state.eod.columns and not st.session_state.eod.empty:
+        alert_resolved = st.session_state.eod[
+            (st.session_state.eod["Type"]=="Alert") &
+            (st.session_state.eod["Name"]==eod_name) &
+            (st.session_state.eod["Status"]=="✅ Resolved")
+        ]["Alert Count Balance"].sum()
     else:
-        alert_count_balance = alert_total
+        alert_resolved = 0
+
+    alert_count_balance = max(alert_total - alert_resolved, 0)
 
 if eod_name:
     eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type=="Activity" else ["✅ Resolved", "❌ Pending"]
