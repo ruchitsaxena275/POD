@@ -84,29 +84,10 @@ if st.sidebar.button("➕ Add Alert"):
     st.session_state.alerts = pd.concat([st.session_state.alerts, pd.DataFrame([new_row])], ignore_index=True)
     st.sidebar.success("Alert entry added!")
 
-# ---- EOD ENTRY ----
-st.sidebar.subheader("📊 End of Day Update")
-eod_type = st.sidebar.radio("Update Type", ["Activity", "Alert"])
-
-eod_name = None
-if eod_type == "Activity" and not st.session_state.activities.empty:
-    eod_name = st.sidebar.selectbox("Select Activity", st.session_state.activities["Activity"].tolist())
-elif eod_type == "Alert" and not st.session_state.alerts.empty:
-    eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
-
-if eod_name:
-    eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type == "Activity" else ["✅ Resolved", "❌ Pending"]
-    eod_status = st.sidebar.radio("Status", eod_status_options)
-    eod_remarks = st.sidebar.text_area("Remarks")
-    if st.sidebar.button("➕ Add EOD Update"):
-        new_row = {"Type": eod_type, "Name": eod_name, "Status": eod_status, "Remarks": eod_remarks}
-        st.session_state.eod = pd.concat([st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True)
-        st.sidebar.success(f"EOD {eod_type} update added!")
-
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
-    <div style="background:linear-gradient(90deg, #EFEF36, #f44336);padding:20px;border-radius:10px;text-align:center;">
+    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:10px;text-align:center;">
         <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
@@ -120,7 +101,7 @@ total_people = st.session_state.manpower["No. of Persons"].sum()
 total_activities = len(st.session_state.activities)
 total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
 
-# Use safe .get() to avoid KeyError
+# Safe EOD handling
 eod = st.session_state.get("eod", pd.DataFrame(columns=["Type","Name","Status","Remarks"]))
 
 completed_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="✅ Completed")])
@@ -146,9 +127,17 @@ st.dataframe(st.session_state.manpower, use_container_width=True)
 st.subheader("📝 Planned Activities")
 st.dataframe(st.session_state.activities, use_container_width=True)
 
-# ----------------- EOD TABLE -----------------
-st.subheader("📊 End of Day Updates")
-st.dataframe(eod, use_container_width=True)
+# ----------------- EOD TABLE EDITABLE -----------------
+st.subheader("📊 End of Day Updates (Editable)")
+if not eod.empty:
+    edited_eod = st.data_editor(
+        eod,
+        num_rows="dynamic",
+        use_container_width=True
+    )
+    st.session_state.eod = edited_eod
+else:
+    st.info("No EOD updates yet. Add activities or alerts first.")
 
 # ----------------- ALERTS BAR CHART -----------------
 st.subheader("🚨 Alerts Overview")
@@ -175,7 +164,7 @@ if st.button("Prepare POD for Download"):
         st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
         st.session_state.activities.to_excel(writer, sheet_name="Activities", index=False)
         st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
-        eod.to_excel(writer, sheet_name="EOD", index=False)
+        st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
     output.seek(0)
     st.download_button(
         label=f"📥 Download POD_{date_str}.xlsx",
