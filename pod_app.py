@@ -95,13 +95,17 @@ if eod_type == "Activity" and not st.session_state.activities.empty:
 elif eod_type == "Alert" and not st.session_state.alerts.empty:
     eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
     alert_total = int(st.session_state.alerts.loc[st.session_state.alerts["Alert Activity"]==eod_name, "Alert Count"].values[0])
-    alert_resolved = int(st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & 
-                                              (st.session_state.eod["Name"]==eod_name) & 
-                                              (st.session_state.eod["Status"]=="✅ Resolved")]["Alert Count Balance"].sum() if not st.session_state.eod.empty else 0)
-    alert_count_balance = max(alert_total - alert_resolved, 0)
+    # Calculate balance of alert count
+    if not st.session_state.eod.empty:
+        alert_resolved = st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & 
+                                             (st.session_state.eod["Name"]==eod_name) & 
+                                             (st.session_state.eod["Status"]=="✅ Resolved")]["Alert Count Balance"].sum()
+        alert_count_balance = max(alert_total - alert_resolved, 0)
+    else:
+        alert_count_balance = alert_total
 
 if eod_name:
-    eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type == "Activity" else ["✅ Resolved", "❌ Pending"]
+    eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type=="Activity" else ["✅ Resolved", "❌ Pending"]
     eod_status = st.sidebar.radio("Status", eod_status_options)
     eod_remarks = st.sidebar.text_area("Remarks")
     if st.sidebar.button("➕ Add EOD Update"):
@@ -118,7 +122,7 @@ if eod_name:
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
 st.markdown(f"""
-    <div style="background:linear-gradient(90deg, #EFEF36, #f44336);padding:20px;border-radius:10px;text-align:center;">
+    <div style="background:linear-gradient(90deg, #ff9800, #f44336);padding:20px;border-radius:10px;text-align:center;">
         <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
         <h3 style="color:white;margin:0;">{today}</h3>
     </div>
@@ -191,4 +195,13 @@ if st.button("Prepare POD for Download"):
     st.download_button(
         label=f"📥 Download POD_{date_str}.xlsx",
         data=output,
-        file_name=f"POD_{date_str}.xlsx
+        file_name=f"POD_{date_str}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    st.success("✅ POD file ready for download!")
+
+# ----------------- FOOTER -----------------
+st.markdown(
+    "<div style='text-align:center;color:gray;'>⚡ Designed by Acciona for Solar Plant Daily Operations</div>",
+    unsafe_allow_html=True
+)
