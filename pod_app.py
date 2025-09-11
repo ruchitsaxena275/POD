@@ -19,7 +19,7 @@ if "alerts" not in st.session_state:
     st.session_state.alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
 
 if "eod" not in st.session_state:
-    st.session_state.eod = pd.DataFrame(columns=["Activity", "Status", "Remarks"])
+    st.session_state.eod = pd.DataFrame(columns=["Type", "Name", "Status", "Remarks"])
 
 # ----------------- POD DATA FOLDER -----------------
 folder = "pod_data"
@@ -86,14 +86,23 @@ if st.sidebar.button("➕ Add Alert"):
 
 # ---- EOD ENTRY ----
 st.sidebar.subheader("📊 End of Day Update")
-if not st.session_state.activities.empty:
-    eod_activity = st.sidebar.selectbox("Select Activity", st.session_state.activities["Activity"].tolist())
-    eod_status = st.sidebar.radio("Status", ["✅ Completed", "❌ Pending", "⏳ Partial"])
+eod_type = st.sidebar.radio("Update Type", ["Activity", "Alert"])
+
+if eod_type == "Activity" and not st.session_state.activities.empty:
+    eod_name = st.sidebar.selectbox("Select Activity", st.session_state.activities["Activity"].tolist())
+elif eod_type == "Alert" and not st.session_state.alerts.empty:
+    eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
+else:
+    eod_name = None
+
+if eod_name:
+    eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type == "Activity" else ["✅ Resolved", "❌ Pending"]
+    eod_status = st.sidebar.radio("Status", eod_status_options)
     eod_remarks = st.sidebar.text_area("Remarks")
     if st.sidebar.button("➕ Add EOD Update"):
-        new_row = {"Activity": eod_activity, "Status": eod_status, "Remarks": eod_remarks}
+        new_row = {"Type": eod_type, "Name": eod_name, "Status": eod_status, "Remarks": eod_remarks}
         st.session_state.eod = pd.concat([st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True)
-        st.sidebar.success("EOD entry added!")
+        st.sidebar.success(f"EOD {eod_type} update added!")
 
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
@@ -111,16 +120,21 @@ total_shifts = len(st.session_state.manpower)
 total_people = st.session_state.manpower["No. of Persons"].sum()
 total_activities = len(st.session_state.activities)
 total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
-completed = len(st.session_state.eod[st.session_state.eod["Status"] == "✅ Completed"])
-pending = len(st.session_state.eod[st.session_state.eod["Status"] == "❌ Pending"])
 
-col1, col2, col3, col4, col5, col6 = st.columns(6)
+completed_activities = len(st.session_state.eod[(st.session_state.eod["Type"]=="Activity") & (st.session_state.eod["Status"]=="✅ Completed")])
+pending_activities = len(st.session_state.eod[(st.session_state.eod["Type"]=="Activity") & (st.session_state.eod["Status"]=="❌ Pending")])
+resolved_alerts = len(st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & (st.session_state.eod["Status"]=="✅ Resolved")])
+pending_alerts = len(st.session_state.eod[(st.session_state.eod["Type"]=="Alert") & (st.session_state.eod["Status"]=="❌ Pending")])
+
+col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
 col1.metric("Total Shifts", total_shifts)
 col2.metric("Total People", int(total_people))
 col3.metric("Total Activities", total_activities)
 col4.metric("Total Alerts", int(total_alerts))
-col5.metric("✅ Completed", completed)
-col6.metric("❌ Pending", pending)
+col5.metric("✅ Completed Activities", completed_activities)
+col6.metric("❌ Pending Activities", pending_activities)
+col7.metric("✅ Resolved Alerts", resolved_alerts)
+col8.metric("❌ Pending Alerts", pending_alerts)
 
 # ----------------- MANPOWER TABLE -----------------
 st.subheader("👷 Shift-wise Manpower Details")
@@ -154,8 +168,6 @@ else:
 st.subheader("💾 Save & Download POD + EOD Data")
 if st.button("Prepare POD for Download"):
     date_str = datetime.today().strftime("%d-%m-%Y")
-    
-    # Save Excel in memory
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
@@ -163,8 +175,6 @@ if st.button("Prepare POD for Download"):
         st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
         st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
     output.seek(0)
-    
-    # Provide download button
     st.download_button(
         label=f"📥 Download POD_{date_str}.xlsx",
         data=output,
