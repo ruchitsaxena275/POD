@@ -14,6 +14,13 @@ DATA_DIR = "pod_data"
 os.makedirs(DATA_DIR, exist_ok=True)
 FILE_PATH = os.path.join(DATA_DIR, f"POD_{TODAY}.xlsx")
 
+# ----------------- EMPLOYEE LIST -----------------
+EMPLOYEE_LIST = [
+    "Kishan","Narendra","Roop Singh","Dinesh","Devisingh","Kanaram","Laxman",
+    "Suresh","Ajay","Narpat","Mahipal","Santosh","Vikram","Navratan",
+    "Rajendra","Gotam","Sawai","Hemant"
+]
+
 # ----------------- DEFAULT DATAFRAMES -----------------
 default_manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
 default_activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No. of Persons", "Employees"])
@@ -78,7 +85,12 @@ shifts = ["Shift A (06:30-15:00)", "General Shift (09:00-18:00)",
           "Shift B (13:00-21:00)", "Shift C (21:00-06:00)"]
 shift = st.sidebar.selectbox("Select Shift", shifts)
 manpower_count = st.sidebar.number_input("Number of Persons", min_value=0, step=1)
-employees = st.sidebar.text_area("Employee Names (comma separated)")
+
+# NEW: Multi-select employee names
+selected_employees = st.sidebar.multiselect("Select Employees", EMPLOYEE_LIST)
+extra_employees = st.sidebar.text_area("Additional Names (if not in list, comma separated)")
+employees = ", ".join(selected_employees + ([extra_employees] if extra_employees else []))
+
 if st.sidebar.button("➕ Add Manpower"):
     new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": employees}
     st.session_state.manpower = pd.concat([st.session_state.manpower, pd.DataFrame([new_row])], ignore_index=True)
@@ -91,14 +103,20 @@ activity = st.sidebar.text_input("Activity Name")
 location = st.sidebar.text_input("Location")
 activity_shift = st.sidebar.selectbox("Assign Shift", shifts)
 activity_people = st.sidebar.number_input("No. of Persons Assigned", min_value=0, step=1)
-activity_employees = st.sidebar.text_area("Employee Names (comma separated for this activity)")
+
+# NEW: Multi-select employee names for activity
+activity_selected_employees = st.sidebar.multiselect("Select Employees for Activity", EMPLOYEE_LIST)
+activity_extra_employees = st.sidebar.text_area("Additional Names (if not in list, comma separated for this activity)")
+activity_employees = ", ".join(activity_selected_employees + ([activity_extra_employees] if activity_extra_employees else []))
+
 if st.sidebar.button("➕ Add Activity"):
     new_row = {
         "Activity": activity,
         "Location": location,
         "Shift": activity_shift,
         "No. of Persons": activity_people,
-        "Employees": activity_employees}
+        "Employees": activity_employees
+    }
     st.session_state.activities = pd.concat([st.session_state.activities, pd.DataFrame([new_row])], ignore_index=True)
     save_data()
     st.sidebar.success("Activity entry added!")
