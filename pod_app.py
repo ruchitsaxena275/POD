@@ -1,125 +1,255 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from datetime import datetime
 from io import BytesIO
+import os
 
 # ----------------- PAGE CONFIG -----------------
 st.set_page_config(page_title="Solar POD Dashboard", layout="wide")
 
-# ----------------- INIT SESSION STATE -----------------
-if "manpower" not in st.session_state:
-    st.session_state.manpower = pd.DataFrame(columns=["Name", "Role", "Shift"])
+# ----------------- AUTO-SAVE CONFIG -----------------
+TODAY = datetime.now().strftime("%Y-%m-%d")
+DATA_DIR = "pod_data"
+os.makedirs(DATA_DIR, exist_ok=True)
+FILE_PATH = os.path.join(DATA_DIR, f"POD_{TODAY}.xlsx")
 
-if "activities" not in st.session_state:
-    st.session_state.activities = []
+# ----------------- EMPLOYEE LIST -----------------
+EMPLOYEES = [
+    "Kishan","Narendra","Roop Singh","Dinesh","Devisingh","Kanaram","Laxman","Suresh",
+    "Ajay","Narpat","Mahipal","Santosh","Vikram","Navratan","Rajendra","Gotam","Sawai","Hemant"
+]
 
-if "alerts" not in st.session_state:
-    st.session_state.alerts = []
+# ----------------- DEFAULT DATAFRAMES -----------------
+default_manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
+default_activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No. of Persons", "Employees"])
+default_alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
+default_eod = pd.DataFrame(columns=["Type", "Name", "Status", "Remarks", "Alert Count Balance"])
 
-if "eod" not in st.session_state:
-    st.session_state.eod = pd.DataFrame(columns=["Type", "Name", "Status", "Alert Count Balance"])
+# ----------------- LOAD TODAY'S DATA IF EXISTS -----------------
+if os.path.exists(FILE_PATH):
+    try:
+        with pd.ExcelFile(FILE_PATH) as xls:
+            st.session_state.manpower = pd.read_excel(xls, "Manpower")
+            st.session_state.activities = pd.read_excel(xls, "Activities")
+            st.session_state.alerts = pd.read_excel(xls, "Alerts")
+            st.session_state.eod = pd.read_excel(xls, "EOD")
+    except Exception:
+        st.session_state.manpower = default_manpower.copy()
+        st.session_state.activities = default_activities.copy()
+        st.session_state.alerts = default_alerts.copy()
+        st.session_state.eod = default_eod.copy()
+else:
+    st.session_state.manpower = default_manpower.copy()
+    st.session_state.activities = default_activities.copy()
+    st.session_state.alerts = default_alerts.copy()
+    st.session_state.eod = default_eod.copy()
 
-# ----------------- SIDEBAR -----------------
-st.sidebar.header("Plan of Day (POD)")
+# ----------------- SAVE FUNCTION -----------------
+def save_data():
+    with pd.ExcelWriter(FILE_PATH, engine="openpyxl") as writer:
+        st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
+        st.session_state.activities.to_excel(writer, sheet_name="Activities", index=False)
+        st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
+        st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
 
-# --- Manpower Section ---
-st.sidebar.subheader("👷 Manpower Entry")
+# ----------------- POD DATA FOLDER -----------------
+folder = "pod_data"
+os.makedirs(folder, exist_ok=True)
 
-with st.sidebar.form("manpower_form", clear_on_submit=True):
-    name = st.text_input("Name")
-    role = st.text_input("Role")
-    shift = st.selectbox("Shift", ["Morning", "Evening", "Night"])
-    submit_manpower = st.form_submit_button("➕ Add Manpower")
+# ----------------- LOAD PREVIOUS DATA MANUALLY -----------------
+st.sidebar.subheader("📂 Load Previous POD Data")
+pod_files = [f for f in os.listdir(folder) if f.startswith("POD_") and f.endswith(".xlsx")]
+pod_files.sort(reverse=True)
 
-if submit_manpower and name and role and shift:
-    new_row = pd.DataFrame([[name, role, shift]], columns=["Name", "Role", "Shift"])
-    st.session_state.manpower = pd.concat([st.session_state.manpower, new_row], ignore_index=True)
+if pod_files:
+    selected_file = st.sidebar.selectbox("Select a date to load", pod_files)
+    if st.sidebar.button("Load Selected Data"):
+        file_path = os.path.join(folder, selected_file)
+        xls = pd.ExcelFile(file_path)
+        st.session_state.manpower = pd.read_excel(xls, sheet_name="Manpower")
+        st.session_state.activities = pd.read_excel(xls, sheet_name="Activities")
+        st.session_state.alerts = pd.read_excel(xls, sheet_name="Alerts")
+        st.session_state.eod = pd.read_excel(xls, sheet_name="EOD")
+        st.sidebar.success(f"✅ Data loaded from {selected_file}")
+else:
+    st.sidebar.info("No POD data saved yet.")
 
-# --- Edit/Delete Manpower ---
+# ----------------- SIDEBAR INPUT -----------------
+st.sidebar.title("⚙️ POD Input Panel")
+
+# ---- SHIFT MANPOWER ENTRY ----
+st.sidebar.subheader("👷 Add Manpower (Shift-wise)")
+shifts = ["Shift A (06:30-15:00)", "General Shift (09:00-18:00)", 
+          "Shift B (13:00-21:00)", "Shift C (21:00-06:00)"]
+shift = st.sidebar.selectbox("Select Shift", shifts)
+manpower_count = st.sidebar.number_input("Number of Persons", min_value=0, step=1)
+employees = st.sidebar.multiselect("Select Employees", EMPLOYEES)
+if st.sidebar.button("➕ Add Manpower"):
+    new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": ", ".join(employees)}
+    st.session_state.manpower = pd.concat([st.session_state.manpower, pd.DataFrame([new_row])], ignore_index=True)
+    save_data()
+    st.sidebar.success("✅ Manpower entry added!")
+
+# ---- DELETE MANPOWER ENTRY ----
 if not st.session_state.manpower.empty:
-    st.sidebar.markdown("### ✏️ Edit / ❌ Delete Manpower")
-    manpower_idx = st.sidebar.selectbox("Select entry", st.session_state.manpower.index, format_func=lambda i: f"{st.session_state.manpower.at[i,'Name']} ({st.session_state.manpower.at[i,'Shift']})")
-
-    # Prefill edit form
-    edit_name = st.sidebar.text_input("Edit Name", st.session_state.manpower.at[manpower_idx, "Name"])
-    edit_role = st.sidebar.text_input("Edit Role", st.session_state.manpower.at[manpower_idx, "Role"])
-    edit_shift = st.sidebar.selectbox("Edit Shift", ["Morning", "Evening", "Night"], index=["Morning", "Evening", "Night"].index(st.session_state.manpower.at[manpower_idx, "Shift"]))
-
-    if st.sidebar.button("💾 Save Changes"):
-        st.session_state.manpower.at[manpower_idx, "Name"] = edit_name
-        st.session_state.manpower.at[manpower_idx, "Role"] = edit_role
-        st.session_state.manpower.at[manpower_idx, "Shift"] = edit_shift
-        st.sidebar.success("Manpower updated ✅")
-
-    if st.sidebar.button("🗑️ Delete Entry"):
+    st.sidebar.subheader("🗑️ Delete Manpower Entry")
+    manpower_idx = st.sidebar.selectbox(
+        "Select entry to delete", 
+        st.session_state.manpower.index,
+        format_func=lambda i: f"{st.session_state.manpower.at[i,'Shift']} - {st.session_state.manpower.at[i,'Employees']}"
+    )
+    if st.sidebar.button("❌ Delete Selected Entry"):
         st.session_state.manpower = st.session_state.manpower.drop(manpower_idx).reset_index(drop=True)
-        st.sidebar.warning("Manpower entry deleted ❌")
+        save_data()
+        st.sidebar.success("✅ Manpower entry deleted!")
 
-# --- Activities Section ---
-st.sidebar.subheader("📝 Activities")
-activity = st.sidebar.text_input("Add Activity")
-if st.sidebar.button("➕ Add Activity") and activity:
-    st.session_state.activities.append(activity)
+# ---- ACTIVITY ENTRY ----
+st.sidebar.subheader("📝 Add Activity")
+activity = st.sidebar.text_input("Activity Name")
+location = st.sidebar.text_input("Location")
+activity_shift = st.sidebar.selectbox("Assign Shift", shifts)
+activity_people = st.sidebar.number_input("No. of Persons Assigned", min_value=0, step=1)
+activity_employees = st.sidebar.multiselect("Assign Employees", EMPLOYEES, key="activity_employees")
+if st.sidebar.button("➕ Add Activity"):
+    new_row = {
+        "Activity": activity,
+        "Location": location,
+        "Shift": activity_shift,
+        "No. of Persons": activity_people,
+        "Employees": ", ".join(activity_employees)}
+    st.session_state.activities = pd.concat([st.session_state.activities, pd.DataFrame([new_row])], ignore_index=True)
+    save_data()
+    st.sidebar.success("✅ Activity entry added!")
 
-# --- Alerts Section ---
-st.sidebar.subheader("🚨 Alerts")
-alert = st.sidebar.text_input("Add Alert")
-alert_count = st.sidebar.number_input("Alert Count", min_value=1, step=1)
-if st.sidebar.button("➕ Add Alert") and alert:
-    st.session_state.alerts.append((alert, alert_count))
+# ---- ALERT ENTRY ----
+st.sidebar.subheader("🚨 Add Alert")
+alert_name = st.sidebar.text_input("Alert Activity")
+alert_count = st.sidebar.number_input("Alert Count", min_value=0, max_value=100, step=1)
+if st.sidebar.button("➕ Add Alert"):
+    new_row = {"Alert Activity": alert_name, "Alert Count": alert_count}
+    st.session_state.alerts = pd.concat([st.session_state.alerts, pd.DataFrame([new_row])], ignore_index=True)
+    save_data()
+    st.sidebar.success("✅ Alert entry added!")
 
-# --- EOD Section ---
-st.sidebar.subheader("📌 End of Day (EOD)")
-eod_name = st.sidebar.text_input("EOD Name")
-eod_type = st.sidebar.selectbox("Type", ["Activity", "Alert"])
-eod_status = st.sidebar.selectbox("Status", ["✅ Completed", "❌ Pending", "✅ Resolved"])
-alert_balance = st.sidebar.number_input("Alert Count Balance", min_value=0, step=1, value=0)
+# ---- EOD ENTRY ----
+st.sidebar.subheader("📊 End of Day Update")
+eod_type = st.sidebar.radio("Update Type", ["Activity", "Alert"])
 
-if st.sidebar.button("📥 Add to EOD") and eod_name:
-    new_row = pd.DataFrame([[eod_type, eod_name, eod_status, alert_balance]],
-                           columns=["Type", "Name", "Status", "Alert Count Balance"])
-    st.session_state.eod = pd.concat([st.session_state.eod, new_row], ignore_index=True)
+eod_name = None
+alert_count_balance = None
+if eod_type == "Activity" and not st.session_state.activities.empty:
+    eod_name = st.sidebar.selectbox("Select Activity", st.session_state.activities["Activity"].tolist())
+elif eod_type == "Alert" and not st.session_state.alerts.empty:
+    eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
+    alert_total = int(st.session_state.alerts.loc[st.session_state.alerts["Alert Activity"]==eod_name, "Alert Count"].values[0])
+    
+    if "Alert Count Balance" in st.session_state.eod.columns and not st.session_state.eod.empty:
+        alert_resolved = st.session_state.eod[
+            (st.session_state.eod["Type"]=="Alert") &
+            (st.session_state.eod["Name"]==eod_name) &
+            (st.session_state.eod["Status"]=="✅ Resolved")
+        ]["Alert Count Balance"].sum()
+    else:
+        alert_resolved = 0
 
-# ----------------- MAIN PAGE -----------------
-st.title("📊 Solar POD Dashboard")
+    alert_count_balance = max(alert_total - alert_resolved, 0)
 
-col1, col2, col3, col4 = st.columns(4)
+if eod_name:
+    eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type=="Activity" else ["✅ Resolved", "❌ Pending"]
+    eod_status = st.sidebar.radio("Status", eod_status_options)
+    eod_remarks = st.sidebar.text_area("Remarks")
+    if st.sidebar.button("➕ Add EOD Update"):
+        new_row = {
+            "Type": eod_type,
+            "Name": eod_name,
+            "Status": eod_status,
+            "Remarks": eod_remarks,
+            "Alert Count Balance": alert_count_balance if eod_type=="Alert" else ""
+        }
+        st.session_state.eod = pd.concat([st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True)
+        save_data()
+        st.sidebar.success(f"✅ EOD {eod_type} update added!")
 
-# Metrics
-col1.metric("Manpower", len(st.session_state.manpower))
-col2.metric("Activities Planned", len(st.session_state.activities))
-col3.metric("Alerts Raised", sum(c for _, c in st.session_state.alerts))
-completed_activities = len(st.session_state.eod[(st.session_state.eod["Type"]=="Activity") & (st.session_state.eod["Status"]=="✅ Completed")])
-col4.metric("Activities Completed", completed_activities)
+# ----------------- HEADER -----------------
+today = datetime.today().strftime("%d-%m-%Y")
+st.markdown(f"""
+    <div style="background:linear-gradient(90deg, #EFEF36, #f44336);padding:15px;border-radius:10px;text-align:center;">
+        <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
+        <h3 style="color:white;margin:0;">{today}</h3>
+    </div>
+""", unsafe_allow_html=True)
 
-# ----------------- DATA TABLES -----------------
-st.subheader("👷 Manpower Allocation")
+st.markdown("---")
+
+# ----------------- KPI CARDS -----------------
+total_shifts = len(st.session_state.manpower)
+total_people = st.session_state.manpower["No. of Persons"].sum()
+total_activities = len(st.session_state.activities)
+total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
+
+eod = st.session_state.get("eod", pd.DataFrame(columns=["Type","Name","Status","Remarks","Alert Count Balance"]))
+
+completed_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="✅ Completed")])
+pending_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="❌ Pending")])
+
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+col1.metric("Total Shifts", total_shifts)
+col2.metric("Total People", int(total_people))
+col3.metric("Total Activities", total_activities)
+col4.metric("Total Alerts", int(total_alerts))
+col5.metric("✅ Completed Activities", completed_activities)
+col6.metric("❌ Pending Activities", pending_activities)
+
+# ----------------- MANPOWER TABLE -----------------
+st.subheader("👷 Shift-wise Manpower Details")
 st.dataframe(st.session_state.manpower, use_container_width=True)
 
-st.subheader("📝 Activities")
-st.table(pd.DataFrame(st.session_state.activities, columns=["Activity"]))
+# ----------------- ACTIVITIES TABLE -----------------
+st.subheader("📝 Planned Activities")
+st.dataframe(st.session_state.activities, use_container_width=True)
 
-st.subheader("🚨 Alerts")
-st.table(pd.DataFrame(st.session_state.alerts, columns=["Alert", "Count"]))
+# ----------------- EOD TABLE -----------------
+st.subheader("📊 End of Day Updates")
+st.dataframe(eod, use_container_width=True)
 
-st.subheader("📌 End of Day (EOD)")
-st.dataframe(st.session_state.eod, use_container_width=True)
+# ----------------- ALERTS BAR CHART -----------------
+st.subheader("🚨 Alerts Overview")
+if not st.session_state.alerts.empty:
+    fig = px.bar(
+        st.session_state.alerts,
+        x="Alert Activity",
+        y="Alert Count",
+        text="Alert Count",
+        color="Alert Count",
+        color_continuous_scale="reds"
+    )
+    fig.update_layout(yaxis=dict(range=[0, 100], dtick=10), xaxis_title="Alert Activities", yaxis_title="Count")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No alerts added yet.")
 
-# ----------------- EXPORT TO EXCEL -----------------
-def convert_df_to_excel():
+# ----------------- SAVE & DOWNLOAD POD -----------------
+st.subheader("💾 Save & Download POD + EOD Data")
+if st.button("Prepare POD for Download"):
+    date_str = datetime.today().strftime("%d-%m-%Y")
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        st.session_state.manpower.to_excel(writer, index=False, sheet_name="Manpower")
-        pd.DataFrame(st.session_state.activities, columns=["Activity"]).to_excel(writer, index=False, sheet_name="Activities")
-        pd.DataFrame(st.session_state.alerts, columns=["Alert", "Count"]).to_excel(writer, index=False, sheet_name="Alerts")
-        st.session_state.eod.to_excel(writer, index=False, sheet_name="EOD")
-    return output.getvalue()
+        st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
+        st.session_state.activities.to_excel(writer, sheet_name="Activities", index=False)
+        st.session_state.alerts.to_excel(writer, sheet_name="Alerts", index=False)
+        st.session_state.eod.to_excel(writer, sheet_name="EOD", index=False)
+    output.seek(0)
+    st.download_button(
+        label=f"📥 Download POD_{date_str}.xlsx",
+        data=output,
+        file_name=f"POD_{date_str}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    st.success("✅ POD file ready for download!")
 
-date_str = datetime.now().strftime("%Y-%m-%d")
-excel_data = convert_df_to_excel()
-st.download_button(
-    label="📥 Download POD Report",
-    data=excel_data,
-    file_name=f"POD_{date_str}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+# ----------------- FOOTER -----------------
+st.markdown(
+    "<div style='text-align:center;color:gray;'>⚡ Designed by Acciona for Solar Plant Daily Operations</div>",
+    unsafe_allow_html=True
 )
