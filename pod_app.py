@@ -14,10 +14,11 @@ DATA_DIR = "pod_data"
 os.makedirs(DATA_DIR, exist_ok=True)
 FILE_PATH = os.path.join(DATA_DIR, f"POD_{TODAY}.xlsx")
 
-# ----------------- EMPLOYEE LIST -----------------
+# ----------------- EMPLOYEE MASTER LIST -----------------
 EMPLOYEES = [
-    "Kishan","Narendra","Roop Singh","Dinesh","Devisingh","Kanaram","Laxman","Suresh",
-    "Ajay","Narpat","Mahipal","Santosh","Vikram","Navratan","Rajendra","Gotam","Sawai","Hemant"
+    "Kishan","Narendra","Roop Singh","Dinesh","Devisingh","Kanaram","Laxman",
+    "Suresh","Ajay","Narpat","Mahipal","Santosh","Vikram","Navratan",
+    "Rajendra","Gotam","Sawai","Hemant"
 ]
 
 # ----------------- DEFAULT DATAFRAMES -----------------
@@ -44,6 +45,10 @@ else:
     st.session_state.activities = default_activities.copy()
     st.session_state.alerts = default_alerts.copy()
     st.session_state.eod = default_eod.copy()
+
+# ----------------- HISTORY STACKS FOR UNDO -----------------
+if "undo_stack" not in st.session_state:
+    st.session_state.undo_stack = {"manpower": [], "activities": []}
 
 # ----------------- SAVE FUNCTION -----------------
 def save_data():
@@ -84,25 +89,30 @@ shifts = ["Shift A (06:30-15:00)", "General Shift (09:00-18:00)",
           "Shift B (13:00-21:00)", "Shift C (21:00-06:00)"]
 shift = st.sidebar.selectbox("Select Shift", shifts)
 manpower_count = st.sidebar.number_input("Number of Persons", min_value=0, step=1)
-employees = st.sidebar.multiselect("Select Employees", EMPLOYEES)
+emp_selected = st.sidebar.multiselect("Select Employees", EMPLOYEES)
+emp_custom = st.sidebar.text_input("Other Names (comma separated)")
+final_employees = emp_selected + ([x.strip() for x in emp_custom.split(",")] if emp_custom else [])
+
 if st.sidebar.button("➕ Add Manpower"):
-    new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": ", ".join(employees)}
+    new_row = {"Shift": shift, "No. of Persons": manpower_count, "Employees": ", ".join(final_employees)}
+    st.session_state.undo_stack["manpower"].append(st.session_state.manpower.copy())
     st.session_state.manpower = pd.concat([st.session_state.manpower, pd.DataFrame([new_row])], ignore_index=True)
     save_data()
-    st.sidebar.success("✅ Manpower entry added!")
+    st.sidebar.success("Manpower entry added!")
 
 # ---- DELETE MANPOWER ENTRY ----
 if not st.session_state.manpower.empty:
     st.sidebar.subheader("🗑️ Delete Manpower Entry")
     manpower_idx = st.sidebar.selectbox(
-        "Select entry to delete", 
+        "Select entry", 
         st.session_state.manpower.index,
         format_func=lambda i: f"{st.session_state.manpower.at[i,'Shift']} - {st.session_state.manpower.at[i,'Employees']}"
     )
     if st.sidebar.button("❌ Delete Selected Entry"):
+        st.session_state.undo_stack["manpower"].append(st.session_state.manpower.copy())
         st.session_state.manpower = st.session_state.manpower.drop(manpower_idx).reset_index(drop=True)
         save_data()
-        st.sidebar.success("✅ Manpower entry deleted!")
+        st.sidebar.success("Entry deleted!")
 
 # ---- ACTIVITY ENTRY ----
 st.sidebar.subheader("📝 Add Activity")
@@ -110,17 +120,22 @@ activity = st.sidebar.text_input("Activity Name")
 location = st.sidebar.text_input("Location")
 activity_shift = st.sidebar.selectbox("Assign Shift", shifts)
 activity_people = st.sidebar.number_input("No. of Persons Assigned", min_value=0, step=1)
-activity_employees = st.sidebar.multiselect("Assign Employees", EMPLOYEES, key="activity_employees")
+act_emp_selected = st.sidebar.multiselect("Select Employees for Activity", EMPLOYEES)
+act_emp_custom = st.sidebar.text_input("Other Names (comma separated for this activity)")
+final_act_employees = act_emp_selected + ([x.strip() for x in act_emp_custom.split(",")] if act_emp_custom else [])
+
 if st.sidebar.button("➕ Add Activity"):
     new_row = {
         "Activity": activity,
         "Location": location,
         "Shift": activity_shift,
         "No. of Persons": activity_people,
-        "Employees": ", ".join(activity_employees)}
+        "Employees": ", ".join(final_act_employees)
+    }
+    st.session_state.undo_stack["activities"].append(st.session_state.activities.copy())
     st.session_state.activities = pd.concat([st.session_state.activities, pd.DataFrame([new_row])], ignore_index=True)
     save_data()
-    st.sidebar.success("✅ Activity entry added!")
+    st.sidebar.success("Activity entry added!")
 
 # ---- ALERT ENTRY ----
 st.sidebar.subheader("🚨 Add Alert")
@@ -130,7 +145,7 @@ if st.sidebar.button("➕ Add Alert"):
     new_row = {"Alert Activity": alert_name, "Alert Count": alert_count}
     st.session_state.alerts = pd.concat([st.session_state.alerts, pd.DataFrame([new_row])], ignore_index=True)
     save_data()
-    st.sidebar.success("✅ Alert entry added!")
+    st.sidebar.success("Alert entry added!")
 
 # ---- EOD ENTRY ----
 st.sidebar.subheader("📊 End of Day Update")
@@ -143,7 +158,6 @@ if eod_type == "Activity" and not st.session_state.activities.empty:
 elif eod_type == "Alert" and not st.session_state.alerts.empty:
     eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
     alert_total = int(st.session_state.alerts.loc[st.session_state.alerts["Alert Activity"]==eod_name, "Alert Count"].values[0])
-    
     if "Alert Count Balance" in st.session_state.eod.columns and not st.session_state.eod.empty:
         alert_resolved = st.session_state.eod[
             (st.session_state.eod["Type"]=="Alert") &
@@ -152,7 +166,6 @@ elif eod_type == "Alert" and not st.session_state.alerts.empty:
         ]["Alert Count Balance"].sum()
     else:
         alert_resolved = 0
-
     alert_count_balance = max(alert_total - alert_resolved, 0)
 
 if eod_name:
@@ -169,7 +182,19 @@ if eod_name:
         }
         st.session_state.eod = pd.concat([st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True)
         save_data()
-        st.sidebar.success(f"✅ EOD {eod_type} update added!")
+        st.sidebar.success(f"EOD {eod_type} update added!")
+
+# ---- UNDO BUTTONS ----
+st.sidebar.subheader("↩️ Undo Last Action")
+if st.sidebar.button("Undo Last Manpower Action") and st.session_state.undo_stack["manpower"]:
+    st.session_state.manpower = st.session_state.undo_stack["manpower"].pop()
+    save_data()
+    st.sidebar.success("Undid last manpower change!")
+
+if st.sidebar.button("Undo Last Activity Action") and st.session_state.undo_stack["activities"]:
+    st.session_state.activities = st.session_state.undo_stack["activities"].pop()
+    save_data()
+    st.sidebar.success("Undid last activity change!")
 
 # ----------------- HEADER -----------------
 today = datetime.today().strftime("%d-%m-%Y")
@@ -189,7 +214,6 @@ total_activities = len(st.session_state.activities)
 total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
 
 eod = st.session_state.get("eod", pd.DataFrame(columns=["Type","Name","Status","Remarks","Alert Count Balance"]))
-
 completed_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="✅ Completed")])
 pending_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="❌ Pending")])
 
