@@ -227,18 +227,36 @@ col6.metric("❌ Pending Activities", pending_activities)
 
 # ----------------- MANPOWER TABLE -----------------
 st.subheader("👷 Shift-wise Manpower Details")
-st.dataframe(st.session_state.manpower, use_container_width=True)
+edited_manpower = st.data_editor(st.session_state.manpower, use_container_width=True, num_rows="dynamic")
+if st.button("💾 Save Manpower Changes"):
+    st.session_state.manpower = edited_manpower.copy()
+    save_data()
+    st.success("✅ Manpower updated!")
 
 # ----------------- ACTIVITIES TABLE -----------------
 st.subheader("📝 Planned Activities")
-st.dataframe(st.session_state.activities, use_container_width=True)
+edited_activities = st.data_editor(st.session_state.activities, use_container_width=True, num_rows="dynamic")
+if st.button("💾 Save Activity Changes"):
+    st.session_state.activities = edited_activities.copy()
+    save_data()
+    st.success("✅ Activities updated!")
 
 # ----------------- EOD TABLE -----------------
 st.subheader("📊 End of Day Updates")
-st.dataframe(eod, use_container_width=True)
+edited_eod = st.data_editor(eod, use_container_width=True, num_rows="dynamic")
+if st.button("💾 Save EOD Changes"):
+    st.session_state.eod = edited_eod.copy()
+    save_data()
+    st.success("✅ EOD updated!")
 
-# ----------------- ALERTS BAR CHART -----------------
-st.subheader("🚨 Alerts Overview")
+# ----------------- ALERTS TABLE -----------------
+st.subheader("🚨 Alerts Overview (Editable)")
+edited_alerts = st.data_editor(st.session_state.alerts, use_container_width=True, num_rows="dynamic")
+if st.button("💾 Save Alerts Changes"):
+    st.session_state.alerts = edited_alerts.copy()
+    save_data()
+    st.success("✅ Alerts updated!")
+
 if not st.session_state.alerts.empty:
     fig = px.bar(
         st.session_state.alerts,
