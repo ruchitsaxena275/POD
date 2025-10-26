@@ -1,17 +1,26 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, date
 from io import BytesIO
 import os
 
 # ----------------- PAGE CONFIG -----------------
 st.set_page_config(page_title="Solar POD Dashboard", layout="wide")
 
-# ----------------- AUTO-SAVE CONFIG -----------------
-TODAY = datetime.now().strftime("%Y-%m-%d")
+# ----------------- AUTO-SAVE CONFIG (With Manual Date Option) -----------------
 DATA_DIR = "pod_data"
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Default = today's date
+default_date = date.today()
+
+# Sidebar date selection
+st.sidebar.markdown("### 📅 Select POD Date")
+selected_date = st.sidebar.date_input("Choose POD Date", value=default_date)
+TODAY = selected_date.strftime("%Y-%m-%d")
+
+# Dynamic file path
 FILE_PATH = os.path.join(DATA_DIR, f"POD_{TODAY}.xlsx")
 
 # ----------------- EMPLOYEE MASTER LIST -----------------
@@ -27,7 +36,7 @@ default_activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No.
 default_alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
 default_eod = pd.DataFrame(columns=["Type", "Name", "Status", "Remarks", "Alert Count Balance"])
 
-# ----------------- LOAD TODAY'S DATA IF EXISTS -----------------
+# ----------------- LOAD SELECTED DATE DATA IF EXISTS -----------------
 if os.path.exists(FILE_PATH):
     try:
         with pd.ExcelFile(FILE_PATH) as xls:
@@ -197,11 +206,11 @@ if st.sidebar.button("Undo Last Activity Action") and st.session_state.undo_stac
     st.sidebar.success("Undid last activity change!")
 
 # ----------------- HEADER -----------------
-today = datetime.today().strftime("%d-%m-%Y")
+display_date = selected_date.strftime("%d-%m-%Y")
 st.markdown(f"""
     <div style="background:linear-gradient(90deg, #EFEF36, #f44336);padding:15px;border-radius:10px;text-align:center;">
         <h1 style="color:white;margin:0;">☀️ JUNA Plan of Day Dashboard</h1>
-        <h3 style="color:white;margin:0;">{today}</h3>
+        <h3 style="color:white;margin:0;">{display_date}</h3>
     </div>
 """, unsafe_allow_html=True)
 
@@ -274,7 +283,7 @@ else:
 # ----------------- SAVE & DOWNLOAD POD -----------------
 st.subheader("💾 Save & Download POD + EOD Data")
 if st.button("Prepare POD for Download"):
-    date_str = datetime.today().strftime("%d-%m-%Y")
+    date_str = selected_date.strftime("%d-%m-%Y")
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         st.session_state.manpower.to_excel(writer, sheet_name="Manpower", index=False)
