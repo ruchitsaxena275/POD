@@ -34,7 +34,9 @@ EMPLOYEES = [
 default_manpower = pd.DataFrame(columns=["Shift", "No. of Persons", "Employees"])
 default_activities = pd.DataFrame(columns=["Activity", "Location", "Shift", "No. of Persons", "Employees"])
 default_alerts = pd.DataFrame(columns=["Alert Activity", "Alert Count"])
-default_eod = pd.DataFrame(columns=["Type", "Name", "Status", "Remarks", "Alert Count Balance"])
+default_eod = pd.DataFrame(columns=[
+    "Type", "Name", "Status", "Remarks", "Resolved Count", "Alert Count Balance"
+])
 
 # ----------------- LOAD SELECTED DATE DATA IF EXISTS -----------------
 if os.path.exists(FILE_PATH):
@@ -162,34 +164,61 @@ eod_type = st.sidebar.radio("Update Type", ["Activity", "Alert"])
 
 eod_name = None
 alert_count_balance = None
+resolved_count = None
+
 if eod_type == "Activity" and not st.session_state.activities.empty:
     eod_name = st.sidebar.selectbox("Select Activity", st.session_state.activities["Activity"].tolist())
+
 elif eod_type == "Alert" and not st.session_state.alerts.empty:
     eod_name = st.sidebar.selectbox("Select Alert", st.session_state.alerts["Alert Activity"].tolist())
-    alert_total = int(st.session_state.alerts.loc[st.session_state.alerts["Alert Activity"]==eod_name, "Alert Count"].values[0])
-    if "Alert Count Balance" in st.session_state.eod.columns and not st.session_state.eod.empty:
-        alert_resolved = st.session_state.eod[
-            (st.session_state.eod["Type"]=="Alert") &
-            (st.session_state.eod["Name"]==eod_name) &
-            (st.session_state.eod["Status"]=="✅ Resolved")
-        ]["Alert Count Balance"].sum()
-    else:
-        alert_resolved = 0
-    alert_count_balance = max(alert_total - alert_resolved, 0)
+    alert_total = int(
+        st.session_state.alerts.loc[
+            st.session_state.alerts["Alert Activity"] == eod_name, "Alert Count"
+        ].values[0]
+    )
+
+    alert_resolved = (
+        st.session_state.eod[
+            (st.session_state.eod["Type"] == "Alert")
+            & (st.session_state.eod["Name"] == eod_name)
+        ]["Resolved Count"].sum()
+        if "Resolved Count" in st.session_state.eod.columns
+        else 0
+    )
+
+    alert_balance = max(alert_total - alert_resolved, 0)
+
+    resolved_count = st.sidebar.number_input(
+        "Resolved Count (Today)", min_value=0, max_value=alert_balance, step=1
+    )
+    alert_count_balance = alert_total - (alert_resolved + resolved_count)
 
 if eod_name:
-    eod_status_options = ["✅ Completed", "❌ Pending"] if eod_type=="Activity" else ["✅ Resolved", "❌ Pending"]
+    eod_status_options = (
+        ["✅ Completed", "❌ Pending"]
+        if eod_type == "Activity"
+        else ["✅ Resolved", "❌ Pending"]
+    )
     eod_status = st.sidebar.radio("Status", eod_status_options)
     eod_remarks = st.sidebar.text_area("Remarks")
+
     if st.sidebar.button("➕ Add EOD Update"):
         new_row = {
             "Type": eod_type,
             "Name": eod_name,
             "Status": eod_status,
             "Remarks": eod_remarks,
-            "Alert Count Balance": alert_count_balance if eod_type=="Alert" else ""
+            "Resolved Count": resolved_count if eod_type == "Alert" else "",
+            "Alert Count Balance": alert_count_balance if eod_type == "Alert" else "",
         }
-        st.session_state.eod = pd.concat([st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True)
+
+        for col in ["Resolved Count", "Alert Count Balance"]:
+            if col not in st.session_state.eod.columns:
+                st.session_state.eod[col] = ""
+
+        st.session_state.eod = pd.concat(
+            [st.session_state.eod, pd.DataFrame([new_row])], ignore_index=True
+        )
         save_data()
         st.sidebar.success(f"EOD {eod_type} update added!")
 
@@ -222,7 +251,7 @@ total_people = st.session_state.manpower["No. of Persons"].sum()
 total_activities = len(st.session_state.activities)
 total_alerts = st.session_state.alerts["Alert Count"].sum() if not st.session_state.alerts.empty else 0
 
-eod = st.session_state.get("eod", pd.DataFrame(columns=["Type","Name","Status","Remarks","Alert Count Balance"]))
+eod = st.session_state.get("eod", pd.DataFrame(columns=["Type","Name","Status","Remarks","Resolved Count","Alert Count Balance"]))
 completed_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="✅ Completed")])
 pending_activities = len(eod[(eod.get("Type")=="Activity") & (eod.get("Status")=="❌ Pending")])
 
@@ -258,24 +287,49 @@ if st.button("💾 Save EOD Changes"):
     save_data()
     st.success("✅ EOD updated!")
 
-# ----------------- ALERTS TABLE -----------------
+# ----------------- ALERTS TABLE + GRAPH -----------------
 st.subheader("🚨 Alerts Overview (Editable)")
-edited_alerts = st.data_editor(st.session_state.alerts, use_container_width=True, num_rows="dynamic")
+edited_alerts = st.data_editor(
+    st.session_state.alerts, use_container_width=True, num_rows="dynamic"
+)
 if st.button("💾 Save Alerts Changes"):
     st.session_state.alerts = edited_alerts.copy()
     save_data()
     st.success("✅ Alerts updated!")
 
 if not st.session_state.alerts.empty:
+    alert_df = st.session_state.alerts.copy()
+
+    if not st.session_state.eod.empty and "Resolved Count" in st.session_state.eod.columns:
+        resolved_data = (
+            st.session_state.eod[st.session_state.eod["Type"] == "Alert"]
+            .groupby("Name")[["Resolved Count", "Alert Count Balance"]]
+            .max()
+            .reset_index()
+            .rename(columns={"Name": "Alert Activity"})
+        )
+        alert_df = alert_df.merge(resolved_data, on="Alert Activity", how="left").fillna(0)
+    else:
+        alert_df["Resolved Count"] = 0
+        alert_df["Alert Count Balance"] = alert_df["Alert Count"]
+
     fig = px.bar(
-        st.session_state.alerts,
-        x="Alert Activity",
-        y="Alert Count",
-        text="Alert Count",
-        color="Alert Count",
-        color_continuous_scale="reds"
+        alert_df,
+        y="Alert Activity",
+        x=["Resolved Count", "Alert Count Balance"],
+        orientation="h",
+        title="Alert Status Overview",
+        text_auto=True,
+        barmode="stack",
+        color_discrete_map={"Resolved Count": "green", "Alert Count Balance": "red"},
     )
-    fig.update_layout(yaxis=dict(range=[0, 100], dtick=10), xaxis_title="Alert Activities", yaxis_title="Count")
+    fig.update_layout(
+        yaxis_title="Alert Activities",
+        xaxis_title="Count",
+        xaxis=dict(dtick=10),
+        legend_title="Alert Status",
+        height=500,
+    )
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No alerts added yet.")
